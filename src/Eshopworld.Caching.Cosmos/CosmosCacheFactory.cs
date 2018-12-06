@@ -30,41 +30,42 @@ namespace Eshopworld.Caching.Cosmos
 
             DocumentClient = new DocumentClient(cosmosAccountEndpoint, cosmosAccountKey);
         }
-        public CosmosCacheFactory(Uri cosmosAccountEndpoint, string cosmosAccountKey, string dbName) : this(cosmosAccountEndpoint, cosmosAccountKey, dbName, CosmosCacheFactorySettings.Default){}
-
+        public CosmosCacheFactory(Uri cosmosAccountEndpoint, string cosmosAccountKey, string dbName) : this(cosmosAccountEndpoint, cosmosAccountKey, dbName, CosmosCacheFactorySettings.Default) { }
 
 
         public ICache<T> CreateDefault<T>() => Create<T>(typeof(T).Name);
 
-        public ICache<T> Create<T>(string name)
+        public ICache<T> Create<T>(string name) => Create<T>(name, null);
+
+        public ICache<T> Create<T>(string name, int? defaultTimeToLive)
         {
             if (name == null) throw new ArgumentNullException(nameof(name));
-            if(_settings.InsertMode == CosmosCache.InsertMode.Document && Type.GetTypeCode(typeof(T)) != TypeCode.Object) throw new ArgumentOutOfRangeException("T",$"Primitive type '{typeof(T)}' not supported. Non primitive types only (i.e. a class)");
+            if (_settings.InsertMode == CosmosCache.InsertMode.Document && Type.GetTypeCode(typeof(T)) != TypeCode.Object) throw new ArgumentOutOfRangeException("T", $"Primitive type '{typeof(T)}' not supported. Non primitive types only (i.e. a class)");
 
-            var documentCollectionURI = documentCollectionURILookup.GetOrAdd(name, TryCreateCollection);
+            var documentCollectionURI = documentCollectionURILookup.GetOrAdd(name, TryCreateCollection(name, defaultTimeToLive));
 
-            return new CosmosCache<T>(documentCollectionURI, DocumentClient, _settings.InsertMode,_settings.UseKeyAsPartitionKey);
+            return new CosmosCache<T>(documentCollectionURI, DocumentClient, _settings.InsertMode, _settings.UseKeyAsPartitionKey);
         }
 
-        private Uri TryCreateCollection(string name)
+        private Uri TryCreateCollection(string name, int? defaultTimeToLive)
         {
-            var db = DocumentClient.CreateDatabaseIfNotExistsAsync(new Database() {Id = _dbName}).ConfigureAwait(false).GetAwaiter().GetResult();
+            var db = DocumentClient.CreateDatabaseIfNotExistsAsync(new Database() { Id = _dbName }).ConfigureAwait(false).GetAwaiter().GetResult();
 
             var docCol = new DocumentCollection()
             {
                 Id = name,
-                DefaultTimeToLive = _settings.DefaultTimeToLive
+                DefaultTimeToLive = defaultTimeToLive ?? _settings.DefaultTimeToLive
             };
 
             if (_settings.UseKeyAsPartitionKey)
             {
-                docCol.PartitionKey = new PartitionKeyDefinition() {Paths = new Collection<string>() {"/id"}};
+                docCol.PartitionKey = new PartitionKeyDefinition() { Paths = new Collection<string>() { "/id" } };
             }
 
-            var dc = DocumentClient.CreateDocumentCollectionIfNotExistsAsync(UriFactory.CreateDatabaseUri(_dbName), docCol,new RequestOptions() {OfferThroughput = _settings.NewCollectionDefaultDTU})
-                                   .ConfigureAwait(false)
-                                   .GetAwaiter()
-                                   .GetResult();
+            var dc = DocumentClient.CreateDocumentCollectionIfNotExistsAsync(UriFactory.CreateDatabaseUri(_dbName), docCol, new RequestOptions() { OfferThroughput = _settings.NewCollectionDefaultDTU })
+                .ConfigureAwait(false)
+                .GetAwaiter()
+                .GetResult();
 
             return new Uri(dc.Resource.AltLink, UriKind.Relative);
         }
