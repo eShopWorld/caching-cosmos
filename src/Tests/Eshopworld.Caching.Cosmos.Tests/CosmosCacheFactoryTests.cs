@@ -1,7 +1,6 @@
 ﻿using System;
 using Eshopworld.Tests.Core;
-using Microsoft.Azure.Documents;
-using Microsoft.Azure.Documents.Client;
+using Newtonsoft.Json;
 using Xunit;
 
 namespace Eshopworld.Caching.Cosmos.Tests
@@ -12,7 +11,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
         public void Create_WithDocumentDirectAndPrimitiveType_RaisesException()
         {
             // Arrange
-            using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName,new CosmosCacheFactorySettings() { InsertMode = CosmosCache.InsertMode.Document}))
+            using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName,new CosmosCacheFactorySettings() { InsertMode = CosmosCache.InsertMode.Document}, JsonSerializer.CreateDefault()))
             {
                 // Assert
                 Assert.Throws<ArgumentOutOfRangeException>(() => factory.Create<string>(""));

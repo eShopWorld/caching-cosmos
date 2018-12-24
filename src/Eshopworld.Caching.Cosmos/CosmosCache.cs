@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
@@ -17,8 +18,20 @@ namespace Eshopworld.Caching.Cosmos
     {
         public enum InsertMode
         {
+            /// <summary>
+            /// Persist data as Envelop object with JSON model represented as a string property.
+            /// </summary>
             JSON,
+
+            /// <summary>
+            /// Persists data as pure JSON model.
+            /// </summary>
             Document,
+
+            /// <summary>
+            /// Use 'Document' mode for writing data. Auto-detect mode for reading data.
+            /// </summary>
+            Autodetect
         }
     }
 
@@ -26,37 +39,40 @@ namespace Eshopworld.Caching.Cosmos
     /// 
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    /// <remarks>Warning: As the cosmos SDK doesnt provide sync methods, all non async methods call their async counterparts and just GetResult().</remarks>
+    /// <remarks>Warning: As the cosmos SDK doesn't provide sync methods, all non async methods call their async counterparts and just GetResult().</remarks>
     public class CosmosCache<T> : IDistributedCache<T>
     {
-        private static readonly FieldInfo propertyBagField = typeof(Document).GetField("propertyBag", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo PropertyBagField = typeof(Document).GetField("propertyBag", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        private readonly DocumentClient _documentClient;
         private readonly Uri _documentCollectionUri;
-        private readonly bool _usePartitionKey = false;
+        private readonly bool _usePartitionKey;
 
-        private readonly CosmosCache.InsertMode _insertMode = CosmosCache.InsertMode.JSON;
+        private readonly CosmosCache.InsertMode _insertMode;
+        private readonly JsonSerializer _jsonSerializer;
 
-        public DocumentClient Database => _documentClient;
+        public DocumentClient Database { get; set; }
 
-        public CosmosCache(Uri documentCollectionUri, DocumentClient documentClient) : this(documentCollectionUri, documentClient, CosmosCache.InsertMode.JSON,false) { }
+        public CosmosCache(Uri documentCollectionUri, DocumentClient documentClient)
+            : this(documentCollectionUri, documentClient, CosmosCache.InsertMode.JSON, false, JsonSerializer.CreateDefault()) { }
 
-        public CosmosCache(Uri documentCollectionUri, DocumentClient documentClient, CosmosCache.InsertMode _insertMode,bool usePartitionKey)
+        public CosmosCache(Uri documentCollectionUri, DocumentClient documentClient, CosmosCache.InsertMode insertMode, bool usePartitionKey, JsonSerializer jsonSerializer)
         {
             _documentCollectionUri = documentCollectionUri ?? throw new ArgumentNullException(nameof(documentCollectionUri));
-            _documentClient = documentClient ?? throw new ArgumentNullException(nameof(documentClient));
-            this._insertMode = _insertMode;
-            this._usePartitionKey = usePartitionKey;
+            Database = documentClient ?? throw new ArgumentNullException(nameof(documentClient));
+            _insertMode = insertMode;
+            _usePartitionKey = usePartitionKey;
+            _jsonSerializer = jsonSerializer;
         }
 
         public T Add(CacheItem<T> item) => AddAsync(item).ConfigureAwait(false).GetAwaiter().GetResult();
-        
+
         public async Task<T> AddAsync(CacheItem<T> item)
         {
-            if (item == null) throw new ArgumentNullException(nameof(item));
+            if (item == null)
+                throw new ArgumentNullException(nameof(item));
 
-            var requestOptions = _usePartitionKey ? new RequestOptions() { PartitionKey = new PartitionKey(item.Key) } : null;
-            var docResponse = await _documentClient.UpsertDocumentAsync(_documentCollectionUri, CreateDocument(item), requestOptions).ConfigureAwait(false);
+            var requestOptions = _usePartitionKey ? new RequestOptions { PartitionKey = new PartitionKey(item.Key) } : null;
+            var docResponse = await Database.UpsertDocumentAsync(_documentCollectionUri, CreateDocument(item), requestOptions).ConfigureAwait(false);
 
             if (!(docResponse.StatusCode == HttpStatusCode.Created || docResponse.StatusCode == HttpStatusCode.OK))
             {
@@ -70,26 +86,33 @@ namespace Eshopworld.Caching.Cosmos
         {
             var doc = new Document();
             var ttl = item.Duration != TimeSpan.MaxValue ? (int?)item.Duration.TotalSeconds : null;
-            
-            
-            if (_insertMode == CosmosCache.InsertMode.Document)
-            {
-                propertyBagField.SetValue(doc, JObject.FromObject(item.Value)); // todo: there has to be a better way to do this. its either this, or call the internal 'FromObject' method..
-                doc.Id = item.Key;
-                doc.TimeToLive = ttl;
 
-                return doc;
-            }
-            else if (_insertMode == CosmosCache.InsertMode.JSON)
+            switch (_insertMode)
             {
-                return new Envelope(item.Key, JsonConvert.SerializeObject(item.Value), ttl);
-            }
-            else
-            {
-                throw new ArgumentOutOfRangeException(nameof(_insertMode), _insertMode, "Condition not supported");
+                case CosmosCache.InsertMode.Document:
+                    {
+                        PropertyBagField.SetValue(doc, JObject.FromObject(item.Value)); // todo: there has to be a better way to do this. its either this, or call the internal 'FromObject' method..
+                        doc.Id = item.Key;
+                        doc.TimeToLive = ttl;
+
+                        return doc;
+                    }
+                case CosmosCache.InsertMode.JSON:
+                    {
+                        return new Envelope(item.Key, JsonConvert.SerializeObject(item.Value), ttl);
+                    }
+                case CosmosCache.InsertMode.Autodetect:
+                    {
+                        PropertyBagField.SetValue(doc, JObject.FromObject(item.Value, _jsonSerializer));
+                        doc.Id = item.Key;
+                        doc.TimeToLive = ttl;
+
+                        return doc;
+                    }
+                default:
+                    throw new NotSupportedException($"InsertMode '{_insertMode}' is not supported!");
             }
         }
-
 
         public void Set(CacheItem<T> item) => Add(item);
         public Task SetAsync(CacheItem<T> item) => AddAsync(item);
@@ -102,7 +125,7 @@ namespace Eshopworld.Caching.Cosmos
         public Task<bool> KeyExpireAsync(string key, TimeSpan? expiry) => Task.FromResult(false);
 
         public void Remove(string key) => RemoveAsync(key).GetAwaiter().GetResult();
-        public Task RemoveAsync(string key) => _documentClient.DeleteDocumentAsync(CreateDocumentURI(key));
+        public Task RemoveAsync(string key) => Database.DeleteDocumentAsync(CreateDocumentURI(key));
 
         public async Task<T> GetAsync(string key) => (await GetResultAsync(key)).Value;
         public T Get(string key) => GetResult(key).Value;
@@ -111,7 +134,8 @@ namespace Eshopworld.Caching.Cosmos
 
         public async Task<CacheResult<T>> GetResultAsync(string key)
         {
-            if (key == null) throw new ArgumentNullException(nameof(key));
+            if (key == null)
+                throw new ArgumentNullException(nameof(key));
 
             try
             {
@@ -130,31 +154,52 @@ namespace Eshopworld.Caching.Cosmos
         private async Task<(HttpStatusCode statusCode, T body)> GetDocument(string key)
         {
             var documentUri = CreateDocumentURI(key);
-            var requestOptions = _usePartitionKey ? new RequestOptions() { PartitionKey = new PartitionKey(key) } : null;
+            var requestOptions = _usePartitionKey ? new RequestOptions { PartitionKey = new PartitionKey(key) } : null;
 
-            if (_insertMode == CosmosCache.InsertMode.JSON)
+            switch (_insertMode)
             {
-                var documentResponse = await _documentClient.ReadDocumentAsync<Envelope>(documentUri, requestOptions).ConfigureAwait(false);
+                case CosmosCache.InsertMode.Document:
+                    {
+                        var documentResponse = await Database.ReadDocumentAsync<T>(documentUri, requestOptions).ConfigureAwait(false);
+                        return (documentResponse.StatusCode, documentResponse.Document);
+                    }
+                case CosmosCache.InsertMode.JSON:
+                    {
+                        var documentResponse = await Database.ReadDocumentAsync<Envelope>(documentUri, requestOptions).ConfigureAwait(false);
+                        return (documentResponse.StatusCode, JsonConvert.DeserializeObject<T>(documentResponse.Document.Blob));
+                    }
+                case CosmosCache.InsertMode.Autodetect:
+                    {
+                        var document = await Database.ReadDocumentAsync(documentUri, requestOptions).ConfigureAwait(false);
+                        var resource = (dynamic)document.Resource;
 
-                return (documentResponse.StatusCode, JsonConvert.DeserializeObject<T>(documentResponse.Document.Blob));
-            }
-            else if (_insertMode == CosmosCache.InsertMode.Document)
-            {
-                var documentResponse = await _documentClient.ReadDocumentAsync<T>(documentUri, requestOptions).ConfigureAwait(false);
-                return (documentResponse.StatusCode, documentResponse.Document);
-            }
-            else
-            {
-                throw new ArgumentOutOfRangeException(nameof(_insertMode), _insertMode, "Condition not supported");
+                        var envelopeValue = ConverDynamicToValue<Envelope>(resource);
+                        if (envelopeValue != null && !string.IsNullOrEmpty(envelopeValue.Blob))
+                        {
+                            var documentResponse = JsonConvert.DeserializeObject<T>(envelopeValue.Blob);
+                            return (document.StatusCode, documentResponse);
+                        }
+
+                        var dynamicValue = ConverDocumentToValue<T>(resource);
+                        if (!dynamicValue.Equals(default(T)))
+                        {
+                            return (document.StatusCode, dynamicValue);
+                        }
+
+                        throw new InvalidCastException("Cannot convert dynamic value to target type!");
+                    }
+                default:
+                    throw new NotSupportedException($"InsertMode '{_insertMode}' is not supported!");
             }
         }
 
         public IEnumerable<KeyValuePair<string, T>> Get(IEnumerable<string> keys) => GetAsync(keys).ConfigureAwait(false).GetAwaiter().GetResult();
         public async Task<IEnumerable<KeyValuePair<string, T>>> GetAsync(IEnumerable<string> keys)
         {
-            if (keys == null) throw new ArgumentNullException(nameof(keys));
+            if (keys == null)
+                throw new ArgumentNullException(nameof(keys));
 
-            using (var queryable = _documentClient.CreateDocumentQuery<Envelope>(_documentCollectionUri)
+            using (var queryable = Database.CreateDocumentQuery<Envelope>(_documentCollectionUri)
                 .Where(e => keys.Contains(e.id))
                 .AsDocumentQuery())
             {
@@ -162,16 +207,15 @@ namespace Eshopworld.Caching.Cosmos
 
                 while (queryable.HasMoreResults)
                 {
-                    foreach(var e in await queryable.ExecuteNextAsync<Envelope>())
+                    foreach (var e in await queryable.ExecuteNextAsync<Envelope>())
                     {
-                        items[e.id] = (T) (object) e;
+                        items[e.id] = (T)(object)e;
                     }
                 }
 
                 return items;
             }
         }
-
 
         public Uri CreateDocumentURI(string key) => new Uri($"{_documentCollectionUri}/docs/{Uri.EscapeUriString(key)}", UriKind.Relative);
 
@@ -187,9 +231,36 @@ namespace Eshopworld.Caching.Cosmos
             public Envelope(string id, string blob, int? expiry = null)
             {
                 this.id = id;
-                this.Blob = blob;
+                Blob = blob;
                 TimeToLive = expiry;
             }
+        }
+
+        private static T ConverDynamicToValue<T>(dynamic resource)
+        {
+            try
+            {
+                return (T)resource;
+            }
+            catch
+            {
+                ;
+            }
+
+            return default(T);
+        }
+        private T ConverDocumentToValue<T>(Document resource)
+        {
+            try
+            {
+                return JObject.Load(new JsonTextReader(new StringReader(resource.ToString())), new JsonLoadSettings()).ToObject<T>(_jsonSerializer);
+            }
+            catch
+            {
+                ;
+            }
+
+            return default(T);
         }
     }
 }

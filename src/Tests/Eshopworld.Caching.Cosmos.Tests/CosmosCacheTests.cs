@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Eshopworld.Caching.Core;
 using Eshopworld.Tests.Core;
+using Newtonsoft.Json;
 using Xunit;
 
 namespace Eshopworld.Caching.Cosmos.Tests
@@ -13,14 +14,16 @@ namespace Eshopworld.Caching.Cosmos.Tests
         private const string CacheKey = "item";
         private CosmosCacheFactory cacheFactory;
         private CosmosCacheFactory docDirectCacheFactory;
+        private CosmosCacheFactory autodetectDirectCacheFactory;
         private CosmosCache<string> stringCache;
         public CosmosCacheTests()
         {
             cacheFactory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName);
-            docDirectCacheFactory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, new CosmosCacheFactorySettings() { InsertMode = CosmosCache.InsertMode.Document});
+            docDirectCacheFactory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, new CosmosCacheFactorySettings() { InsertMode = CosmosCache.InsertMode.Document }, JsonSerializer.CreateDefault());
+            autodetectDirectCacheFactory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, new CosmosCacheFactorySettings() { InsertMode = CosmosCache.InsertMode.Autodetect }, JsonSerializer.CreateDefault());
 
             stringCache = (CosmosCache<string>)cacheFactory.Create<string>("string-collection");
-            
+
         }
 
         public static IEnumerable<object[]> GetInsertModes()
@@ -38,7 +41,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             // Assert
         }
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public async Task SetAsyncString_DoesNotThrow()
         {
             // Arrange
@@ -62,7 +65,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             Assert.False(stringCache.Exists(CacheKey));
         }
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public void GetString_ItemExistsInCache()
         {
             // Arrange
@@ -78,7 +81,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             Assert.Equal(result, cacheValue);
         }
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public async Task GetAsyncString_ItemExistsInCache()
         {
             // Arrange
@@ -96,7 +99,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
 
 
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public void Remove_AfterRemove_GetReturnsNull()
         {
             // Arrange
@@ -113,7 +116,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             Assert.Null(result);
         }
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public async Task RemoveAsync_AfterRemove_GetReturnsNull()
         {
             // Arrange
@@ -132,7 +135,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
 
 
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public void Exists_AfterAdding_ReturnsTrue()
         {
             // Arrange
@@ -146,7 +149,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             Assert.True(stringCache.Exists(CacheKey));
         }
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public async Task ExistsAsync_AfterAdding_ReturnsTrue()
         {
             // Arrange
@@ -160,7 +163,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             Assert.True(await stringCache.ExistsAsync(CacheKey));
         }
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public void Exists_AfterAddingAndRemoving_ReturnsFalse()
         {
             // Arrange
@@ -174,7 +177,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             Assert.False(stringCache.Exists(CacheKey));
         }
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public async Task Exists_AfterAddingAndRemoving_GetReturnsNull()
         {
             // Arrange
@@ -224,7 +227,6 @@ namespace Eshopworld.Caching.Cosmos.Tests
             Assert.False(await stringCache.ExistsAsync(CacheKey));
         }
 
-
         [Theory, IsIntegration]
         [MemberData(nameof(GetInsertModes))]
         public void Get_SimpleObject_ReturnedObjectIsIdentical(CosmosCache.InsertMode mode)
@@ -239,6 +241,24 @@ namespace Eshopworld.Caching.Cosmos.Tests
 
             // Assert
             Assert.False(object.ReferenceEquals(result, value));
+            Assert.Equal(result, value);
+        }
+
+        [Fact, IsUnit]
+        public void Get_SimpleObjectWhenAutodetectUsed_ReturnedObjectIsIdentical()
+        {
+            // Arrange
+            var cacheJson = CreateCache<SimpleObject>(CosmosCache.InsertMode.JSON);
+            var value = SimpleObject.Create();
+            cacheJson.Set(new CacheItem<SimpleObject>(CacheKey, value, TimeSpan.FromSeconds(5)));
+
+            var cacheAutodetect = CreateCache<SimpleObject>(CosmosCache.InsertMode.Autodetect);
+
+            // Act
+            var result = cacheAutodetect.Get(CacheKey);
+
+            // Assert
+            Assert.False(ReferenceEquals(result, value));
             Assert.Equal(result, value);
         }
 
@@ -261,7 +281,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
         }
 
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public void GetResult_SimpleObject_ReturnedObjectIsIdentical()
         {
             // Arrange
@@ -279,7 +299,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             Assert.Equal(result.Value, value);
         }
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public async Task GetResultAsync_SimpleObject_ReturnedObjectIsIdentical()
         {
             // Arrange
@@ -297,7 +317,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             Assert.Equal(result.Value, value);
         }
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public void GetResult_MissingObject_ResultDoesNotHaveValue()
         {
             // Arrange
@@ -313,7 +333,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
         }
 
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public void Set_MultipeTasks_NoExceptions()
         {
             // Arrange
@@ -336,7 +356,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             Assert.True(loopResult.IsCompleted);
         }
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public void Get_MultipeTasks_NoExceptions()
         {
             // Arrange
@@ -363,12 +383,12 @@ namespace Eshopworld.Caching.Cosmos.Tests
             Assert.True(loopResult.IsCompleted);
         }
 
-        [Fact,IsIntegration]
+        [Fact, IsIntegration]
         public async Task AddAsync_Set_ExpiryTimeAtDocumentLevel_ItemDoesntExistInCache()
         {
             // Arrange
             var cacheValue = "Test";
-           
+
             await stringCache.AddAsync(new CacheItem<string>(CacheKey, cacheValue, TimeSpan.FromSeconds(5)));
 
             // Act
@@ -386,7 +406,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             var cacheValue = "Test";
 
             await stringCache.AddAsync(new CacheItem<string>(CacheKey, cacheValue, TimeSpan.FromSeconds(5)));
-            
+
             // Assert
             Assert.True(await stringCache.ExistsAsync(CacheKey));
         }
@@ -411,7 +431,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             var cacheValue = "Test";
 
             // Act
-            await autoExpireCache.AddAsync(new CacheItem<string>(CacheKey, cacheValue,TimeSpan.MaxValue));
+            await autoExpireCache.AddAsync(new CacheItem<string>(CacheKey, cacheValue, TimeSpan.MaxValue));
             await Task.Delay(TimeSpan.FromSeconds(4));
 
             // Assert
@@ -431,7 +451,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
 
             // Assert
             Assert.True(await autoExpireCache.ExistsAsync(CacheKey));
-            
+
             await Task.Delay(TimeSpan.FromSeconds(4));
             Assert.False(await autoExpireCache.ExistsAsync(CacheKey));
         }
@@ -456,7 +476,11 @@ namespace Eshopworld.Caching.Cosmos.Tests
         public async Task AddAsync_WithPartitionKeySet_CanReadAndWriteWithPartitionKey()
         {
             // Arrange
-            var cacheFactory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, new CosmosCacheFactorySettings() { InsertMode = CosmosCache.InsertMode.Document,UseKeyAsPartitionKey = true});
+            var cacheFactory = new CosmosCacheFactory(
+                LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName,
+                new CosmosCacheFactorySettings() { InsertMode = CosmosCache.InsertMode.Document, UseKeyAsPartitionKey = true },
+                JsonSerializer.CreateDefault());
+
             var partCache = cacheFactory.Create<SimpleObject>($"partition-{typeof(SimpleObject).Name}");
             var value = SimpleObject.Create();
 
@@ -470,11 +494,29 @@ namespace Eshopworld.Caching.Cosmos.Tests
 
         private static CosmosCache<string> CreateTTLCache(TimeSpan defaultTTL)
         {
-            var cFactory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, new CosmosCacheFactorySettings() { DefaultTimeToLive = (int)defaultTTL.TotalSeconds });
-            return  (CosmosCache<string>)cFactory.Create<string>("ttl-string-collection");
+            var cFactory = new CosmosCacheFactory(
+                LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName,
+                new CosmosCacheFactorySettings() { DefaultTimeToLive = (int)defaultTTL.TotalSeconds },
+                JsonSerializer.CreateDefault());
+            return (CosmosCache<string>)cFactory.Create<string>("ttl-string-collection");
         }
 
-        private CosmosCache<T> CreateCache<T>(CosmosCache.InsertMode mode) => mode == CosmosCache.InsertMode.Document ? CreateDocumentDirectCache<T>() : (CosmosCache<T>)cacheFactory.CreateDefault<T>();
-        private CosmosCache<T> CreateDocumentDirectCache<T>() => (CosmosCache<T>)docDirectCacheFactory.Create<T>($"documentDirect-{typeof(T).Name}");
+        private CosmosCache<T> CreateCache<T>(CosmosCache.InsertMode mode)
+        {
+            switch (mode)
+            {
+                case CosmosCache.InsertMode.Autodetect:
+                    return (CosmosCache<T>)autodetectDirectCacheFactory.Create<T>(typeof(T).Name);
+                case CosmosCache.InsertMode.Document:
+                    return (CosmosCache<T>)docDirectCacheFactory.Create<T>(typeof(T).Name);
+                case CosmosCache.InsertMode.JSON:
+                    return (CosmosCache<T>)cacheFactory.CreateDefault<T>();
+                default:
+                    throw new NotImplementedException($"Cache creator for InsertMode='{mode}' is not implemented!");
+            }
+        }
+
+        private CosmosCache<T> CreateDocumentDirectCache<T>() => 
+            (CosmosCache<T>)docDirectCacheFactory.Create<T>($"documentDirect-{typeof(T).Name}");
     }
 }
