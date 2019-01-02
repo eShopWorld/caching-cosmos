@@ -53,7 +53,7 @@ namespace Eshopworld.Caching.Cosmos
         public DocumentClient Database { get; set; }
 
         public CosmosCache(Uri documentCollectionUri, DocumentClient documentClient)
-            : this(documentCollectionUri, documentClient, CosmosCache.InsertMode.JSON, false, JsonSerializer.CreateDefault()) { }
+            : this(documentCollectionUri, documentClient, CosmosCache.InsertMode.JSON, false, null) { }
 
         public CosmosCache(Uri documentCollectionUri, DocumentClient documentClient, CosmosCache.InsertMode insertMode, bool usePartitionKey, JsonSerializer jsonSerializer)
         {
@@ -61,7 +61,7 @@ namespace Eshopworld.Caching.Cosmos
             Database = documentClient ?? throw new ArgumentNullException(nameof(documentClient));
             _insertMode = insertMode;
             _usePartitionKey = usePartitionKey;
-            _jsonSerializer = jsonSerializer;
+            _jsonSerializer = jsonSerializer ?? JsonSerializer.CreateDefault();
         }
 
         public T Add(CacheItem<T> item) => AddAsync(item).ConfigureAwait(false).GetAwaiter().GetResult();
@@ -253,7 +253,7 @@ namespace Eshopworld.Caching.Cosmos
         {
             try
             {
-                return JObject.Load(new JsonTextReader(new StringReader(resource.ToString())), new JsonLoadSettings()).ToObject<T>(_jsonSerializer);
+                return JObject.Load(new JsonTextReader(new StringReader(resource.ToString()))).ToObject<T>(_jsonSerializer);
             }
             catch
             {
