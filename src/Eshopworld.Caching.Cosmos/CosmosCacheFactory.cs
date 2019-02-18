@@ -12,6 +12,8 @@ namespace Eshopworld.Caching.Cosmos
         private readonly string _dbName;
         private readonly CosmosCacheFactorySettings _settings;
         private readonly ConcurrentDictionary<string, Uri> documentCollectionURILookup = new ConcurrentDictionary<string, Uri>();
+        
+        private static readonly IndexingPolicy DefaultIndexingPolicy = new IndexingPolicy();
 
         public DocumentClient DocumentClient { get; }
 
@@ -50,6 +52,8 @@ namespace Eshopworld.Caching.Cosmos
             return new CosmosCache<T>(documentCollectionUri, DocumentClient, _settings.InsertMode, _settings.UseKeyAsPartitionKey);
         }
 
+        protected virtual IndexingPolicy GetCollectionIndexingPolicy(string dbName, string collectionName) => DefaultIndexingPolicy;
+
         private Uri TryCreateCollection(string name)
         {
             var db = DocumentClient.CreateDatabaseIfNotExistsAsync(new Database() {Id = _dbName}).ConfigureAwait(false).GetAwaiter().GetResult();
@@ -57,7 +61,8 @@ namespace Eshopworld.Caching.Cosmos
             var docCol = new DocumentCollection()
             {
                 Id = name,
-                DefaultTimeToLive = _settings.DefaultTimeToLive
+                DefaultTimeToLive = _settings.DefaultTimeToLive,
+                IndexingPolicy = GetCollectionIndexingPolicy(_dbName, name) ?? DefaultIndexingPolicy
             };
 
             if (_settings.UseKeyAsPartitionKey)
