@@ -12,14 +12,14 @@ namespace Eshopworld.Caching.Cosmos.Tests
         public void Create_WithDocumentDirectAndPrimitiveType_RaisesException()
         {
             // Arrange
-            using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, new CosmosCacheFactorySettings() { InsertMode = CosmosCache.InsertMode.Document }))
+            using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName,new CosmosCacheFactorySettings() { InsertMode = CosmosCache.InsertMode.Document}))
             {
                 // Assert
                 Assert.Throws<ArgumentOutOfRangeException>(() => factory.Create<string>(""));
             }
         }
 
-        [Fact, IsIntegration]
+        [Fact,IsIntegration]
         public void NewInstance_WithValidConnectionString_NoException()
         {
             // Arrange
@@ -28,7 +28,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             // Assert
         }
 
-        [Fact, IsIntegration]
+        [Fact,IsIntegration]
         public void Create_CosmosCache_NoException()
         {
             // Arrange
@@ -42,7 +42,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             }
         }
 
-        [Fact, IsIntegration]
+        [Fact,IsIntegration]
         public void Create_CosmosCacheMultipleTimes_NoException()
         {
             // Arrange
@@ -59,7 +59,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
             }
         }
 
-        [Fact, IsIntegration]
+        [Fact,IsIntegration]
         public void Create_WithNonExistingCollection_NewCollectionIsCreated()
         {
             var tempCollectionName = Guid.NewGuid().ToString();
@@ -70,7 +70,7 @@ namespace Eshopworld.Caching.Cosmos.Tests
                 // Act
                 factory.Create<SimpleObject>(tempCollectionName);
 
-                Assert.Equal(System.Net.HttpStatusCode.OK, factory.DocumentClient.ReadDocumentCollectionAsync(new Uri($"dbs/test-db/colls/{tempCollectionName}", UriKind.Relative)).GetAwaiter().GetResult().StatusCode);
+                Assert.Equal(System.Net.HttpStatusCode.OK, factory.DocumentClient.ReadDocumentCollectionAsync(new Uri($"dbs/test-db/colls/{tempCollectionName}",UriKind.Relative)).GetAwaiter().GetResult().StatusCode);
             }
         }
 
