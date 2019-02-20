@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using Eshopworld.Caching.Core;
 using Microsoft.Azure.Documents;
 using Microsoft.Azure.Documents.Client;
@@ -12,8 +14,6 @@ namespace Eshopworld.Caching.Cosmos
         private readonly string _dbName;
         private readonly CosmosCacheFactorySettings _settings;
         private readonly ConcurrentDictionary<string, Uri> documentCollectionURILookup = new ConcurrentDictionary<string, Uri>();
-        
-        private static readonly IndexingPolicy DefaultIndexingPolicy = new IndexingPolicy();
 
         public DocumentClient DocumentClient { get; }
 
@@ -31,7 +31,7 @@ namespace Eshopworld.Caching.Cosmos
 
             DocumentClient = new DocumentClient(cosmosAccountEndpoint, cosmosAccountKey);
         }
-        public CosmosCacheFactory(Uri cosmosAccountEndpoint, string cosmosAccountKey, string dbName) : this(cosmosAccountEndpoint, cosmosAccountKey, dbName, CosmosCacheFactorySettings.Default){}
+        public CosmosCacheFactory(Uri cosmosAccountEndpoint, string cosmosAccountKey, string dbName) : this(cosmosAccountEndpoint, cosmosAccountKey, dbName, CosmosCacheFactorySettings.Default) { }
 
 
 
@@ -52,25 +52,43 @@ namespace Eshopworld.Caching.Cosmos
             return new CosmosCache<T>(documentCollectionUri, DocumentClient, _settings.InsertMode, _settings.UseKeyAsPartitionKey);
         }
 
-        protected virtual IndexingPolicy GetCollectionIndexingPolicy(string dbName, string collectionName) => DefaultIndexingPolicy;
+        private IndexingPolicy BuildIndexingPolicy()
+        {
+            if ((_settings.IndexingSettings?.ExcludedPaths?.Length ?? 0) == 0 && (_settings.IndexingSettings?.IncludedPaths?.Length ?? 0) == 0)
+            {
+                return new IndexingPolicy();
+            }
+
+            return new IndexingPolicy
+            {
+                Automatic = true,
+                IndexingMode = IndexingMode.Consistent,
+
+                ExcludedPaths = new Collection<ExcludedPath>(
+                    _settings.IndexingSettings?.ExcludedPaths?.Select(path => new ExcludedPath { Path = path }).ToList() ?? new List<ExcludedPath>()),
+
+                IncludedPaths = new Collection<IncludedPath>(
+                    _settings.IndexingSettings?.IncludedPaths?.Select(path => new IncludedPath { Path = path }).ToList() ?? new List<IncludedPath>())
+            };
+        }
 
         private Uri TryCreateCollection(string name)
         {
-            var db = DocumentClient.CreateDatabaseIfNotExistsAsync(new Database() {Id = _dbName}).ConfigureAwait(false).GetAwaiter().GetResult();
+            var db = DocumentClient.CreateDatabaseIfNotExistsAsync(new Database() { Id = _dbName }).ConfigureAwait(false).GetAwaiter().GetResult();
 
             var docCol = new DocumentCollection()
             {
                 Id = name,
                 DefaultTimeToLive = _settings.DefaultTimeToLive,
-                IndexingPolicy = GetCollectionIndexingPolicy(_dbName, name) ?? DefaultIndexingPolicy
+                IndexingPolicy = BuildIndexingPolicy()
             };
 
             if (_settings.UseKeyAsPartitionKey)
             {
-                docCol.PartitionKey = new PartitionKeyDefinition() {Paths = new Collection<string>() {"/id"}};
+                docCol.PartitionKey = new PartitionKeyDefinition() { Paths = new Collection<string>() { "/id" } };
             }
 
-            var dc = DocumentClient.CreateDocumentCollectionIfNotExistsAsync(UriFactory.CreateDatabaseUri(_dbName), docCol,new RequestOptions() {OfferThroughput = _settings.NewCollectionDefaultDTU})
+            var dc = DocumentClient.CreateDocumentCollectionIfNotExistsAsync(UriFactory.CreateDatabaseUri(_dbName), docCol, new RequestOptions() { OfferThroughput = _settings.NewCollectionDefaultDTU })
                                    .ConfigureAwait(false)
                                    .GetAwaiter()
                                    .GetResult();
