@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Eshopworld.Tests.Core;
+using Microsoft.Azure.Documents.Client;
 using Xunit;
 
 namespace Eshopworld.Caching.Cosmos.Tests
@@ -71,5 +73,71 @@ namespace Eshopworld.Caching.Cosmos.Tests
                 Assert.Equal(System.Net.HttpStatusCode.OK, factory.DocumentClient.ReadDocumentCollectionAsync(new Uri($"dbs/test-db/colls/{tempCollectionName}",UriKind.Relative)).GetAwaiter().GetResult().StatusCode);
             }
         }
+
+        [Fact, IsIntegration]
+        public async Task Create_WithCustomIndexingPolicySettingsForCollection_NewCollectionIsCreated()
+        {
+            // Arrange
+            var tempCollectionName = Guid.NewGuid().ToString();
+
+            var settings = new CosmosCacheFactorySettings
+            {
+                IndexingSettings = new CosmosCacheFactoryIndexingSettings
+                {
+                    ExcludedPaths = new[] { "/*" },
+                    IncludedPaths = new[] { $"/{nameof(SimpleObject.Foo)}/?", $"/{nameof(SimpleObject.Value)}/?" }
+                }
+            };
+
+            var collectionUri = UriFactory.CreateDocumentCollectionUri(LocalClusterCosmosDb.DbName, tempCollectionName);
+
+            using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, settings))
+            using (var client = new DocumentClient(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey))
+            {
+                // Act
+                factory.Create<SimpleObject>(tempCollectionName);
+
+                // Assert
+                var actualIndexingPolicy = (await client.ReadDocumentCollectionAsync(collectionUri))
+                    .Resource.IndexingPolicy;
+
+                Assert.Single(actualIndexingPolicy.ExcludedPaths);
+                Assert.Contains(actualIndexingPolicy.ExcludedPaths, x => x.Path == "/*");
+
+                Assert.Equal(2, actualIndexingPolicy.IncludedPaths.Count);
+                Assert.Contains(actualIndexingPolicy.IncludedPaths, x => x.Path == "/Foo/?");
+                Assert.Contains(actualIndexingPolicy.IncludedPaths, x => x.Path == "/Value/?");
+
+                // Cleanup
+                await factory.DocumentClient.DeleteDocumentCollectionAsync(collectionUri);
+            }
+        }
+
+        [Fact, IsIntegration]
+        public async Task Create_WithEmptyIndexingPolicySettingsForCollection_CollectionIsCreatedWithDefaultPolicy()
+        {
+            // Arrange
+            var tempCollectionName = Guid.NewGuid().ToString();
+            var collectionUri = UriFactory.CreateDocumentCollectionUri(LocalClusterCosmosDb.DbName, tempCollectionName);
+
+            using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName))
+            using (var client = new DocumentClient(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey))
+            {
+                // Act
+                factory.Create<SimpleObject>(tempCollectionName);
+
+                // Assert
+                var actualIndexingPolicy = (await client.ReadDocumentCollectionAsync(collectionUri))
+                    .Resource.IndexingPolicy;
+
+                Assert.Empty(actualIndexingPolicy.ExcludedPaths);
+
+                Assert.Single(actualIndexingPolicy.IncludedPaths);
+                Assert.Contains(actualIndexingPolicy.IncludedPaths, x => x.Path == "/*");
+
+                // Cleanup
+                await factory.DocumentClient.DeleteDocumentCollectionAsync(collectionUri);
+            }
+        }
     }
- }
+}
