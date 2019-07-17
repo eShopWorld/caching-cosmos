@@ -88,7 +88,9 @@ namespace Eshopworld.Caching.Cosmos
                 docCol.PartitionKey = new PartitionKeyDefinition() { Paths = new Collection<string>() {"/id"} };
             }
 
-            var dc = DocumentClient.CreateDocumentCollectionIfNotExistsAsync(UriFactory.CreateDatabaseUri(_dbName), docCol,new RequestOptions() {OfferThroughput = _settings.NewCollectionDefaultDTU})
+            var requestOptions = _settings.DtuDefinedInCosmos ? null : new RequestOptions {OfferThroughput = _settings.NewCollectionDefaultDTU};
+
+            var dc = DocumentClient.CreateDocumentCollectionIfNotExistsAsync(UriFactory.CreateDatabaseUri(_dbName), docCol, requestOptions)
                                    .ConfigureAwait(false)
                                    .GetAwaiter()
                                    .GetResult();
