@@ -29,10 +29,9 @@ namespace Eshopworld.Caching.Cosmos
             _dbName = dbName ?? throw new ArgumentNullException(nameof(dbName));
             _settings = settings;
 
-            DocumentClient = new DocumentClient(cosmosAccountEndpoint, cosmosAccountKey);
+            DocumentClient = new DocumentClient(cosmosAccountEndpoint, cosmosAccountKey, GetConnectionPolicy(settings));
         }
         public CosmosCacheFactory(Uri cosmosAccountEndpoint, string cosmosAccountKey, string dbName) : this(cosmosAccountEndpoint, cosmosAccountKey, dbName, CosmosCacheFactorySettings.Default){}
-
 
 
         public ICache<T> CreateDefault<T>() => Create<T>(typeof(T).Name);
@@ -50,6 +49,30 @@ namespace Eshopworld.Caching.Cosmos
         protected virtual ICache<T> BuildCacheInstance<T>(Uri documentCollectionUri)
         {
             return new CosmosCache<T>(documentCollectionUri, DocumentClient, _settings.InsertMode, _settings.UseKeyAsPartitionKey);
+        }
+
+        private ConnectionPolicy GetConnectionPolicy(CosmosCacheFactorySettings settings)
+        {
+            if (settings.MultiRegionReadWrite)
+            {
+                var connectionPolicy = new ConnectionPolicy
+                {
+                    UseMultipleWriteLocations = true,
+                    EnableEndpointDiscovery = true
+                };
+                try
+                {
+                    connectionPolicy.SetCurrentLocation(settings.CurrentRegion);
+                }
+                catch (Exception e)
+                {
+                    throw new ArgumentException($"unable to set current location to {settings.CurrentRegion}", e);
+                }                
+
+                return connectionPolicy;
+            }
+
+            return null;
         }
 
         private IndexingPolicy BuildIndexingPolicy()
