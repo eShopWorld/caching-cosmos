@@ -27,7 +27,7 @@ namespace Eshopworld.Caching.Cosmos
         public CosmosCacheFactory(Uri cosmosAccountEndpoint, string cosmosAccountKey, string dbName, CosmosCacheFactorySettings settings)
         {
             _dbName = dbName ?? throw new ArgumentNullException(nameof(dbName));
-            _settings = settings;
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
             DocumentClient = new DocumentClient(cosmosAccountEndpoint, cosmosAccountKey, GetConnectionPolicy(settings));
         }
