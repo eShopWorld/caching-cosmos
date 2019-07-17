@@ -51,7 +51,7 @@ namespace Eshopworld.Caching.Cosmos
             return new CosmosCache<T>(documentCollectionUri, DocumentClient, _settings.InsertMode, _settings.UseKeyAsPartitionKey);
         }
 
-        private ConnectionPolicy GetConnectionPolicy(CosmosCacheFactorySettings settings)
+        private static ConnectionPolicy GetConnectionPolicy(CosmosCacheFactorySettings settings)
         {
             if (settings.MultiRegionReadWrite)
             {
