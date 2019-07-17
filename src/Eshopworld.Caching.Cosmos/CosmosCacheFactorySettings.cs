@@ -7,8 +7,8 @@
         public int DefaultTimeToLive { get; set; } = -1;  //never expire by default
         public bool UseKeyAsPartitionKey { get; set; }
         public CosmosCacheFactoryIndexingSettings IndexingSettings { get; set; } = new CosmosCacheFactoryIndexingSettings();
-        public bool MultiRegionReadWrite { get; set; } = false;
-        public string CurrentRegion { get; set; } = null;
+        public bool MultiRegionReadWrite { get; set; }
+        public string CurrentRegion { get; set; }
         /// <summary>
         /// Enables using shared throughput provisioned on a database.
         /// </summary>
