@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Eshopworld.Caching.Cosmos;
 using Eshopworld.Caching.Cosmos.Tests;
 using Eshopworld.Tests.Core;
+using Microsoft.Azure.Documents;
 using Microsoft.Azure.Documents.Client;
 using Xunit;
 
@@ -139,5 +141,138 @@ public class CosmosCacheFactoryTests
             // Cleanup
             await factory.DocumentClient.DeleteDocumentCollectionAsync(collectionUri);
         }
+    }
+
+    [Fact, IsIntegration]
+    public async Task Create_WithDBSharedRUSetting_WithoutCollectionRUvalue_NoCollectionOfferOnlyDbOffer()
+    {
+        // Arrange
+        var tempCollectionName = Guid.NewGuid().ToString();
+        var tempDbName = Guid.NewGuid().ToString();
+        var collectionUri = UriFactory.CreateDocumentCollectionUri(tempDbName, tempCollectionName);
+        var databaseUri = UriFactory.CreateDatabaseUri(tempDbName);
+        var offerThroughput = 400;
+        var cosmosCacheFactorySettings = new CosmosCacheFactorySettings
+        {
+            UseDatabaseSharedThroughput = true,
+            UseKeyAsPartitionKey = true
+        };
+
+        using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, tempDbName, cosmosCacheFactorySettings))
+        using (var client = new DocumentClient(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey))
+        {
+            // Act
+            await client.CreateDatabaseAsync(new Database { Id = tempDbName }, new RequestOptions
+            {
+                OfferThroughput = offerThroughput
+            });
+            
+            //ensure temp collection is created
+            factory.Create<SimpleObject>(tempCollectionName);
+
+            Resource collectionResource = await client.ReadDocumentCollectionAsync(collectionUri);
+            Resource databaseResource = await client.ReadDatabaseAsync(databaseUri);
+            var collectionOffer = GetOffer(collectionResource, client);
+            var databaseOffer = GetOffer(databaseResource, client);            
+            var dbOfferResource = await client.ReadOfferAsync(databaseOffer.SelfLink);
+            var dbOfferContent = dbOfferResource.Resource.GetPropertyValue<OfferContentV2>("content");
+
+            // Assert
+            Assert.Null(collectionOffer);
+            Assert.Equal(offerThroughput, dbOfferContent.OfferThroughput);
+
+            // Cleanup
+            await factory.DocumentClient.DeleteDocumentCollectionAsync(collectionUri);            
+            await factory.DocumentClient.DeleteDatabaseAsync(databaseUri);
+        }
+    }
+
+
+    [Fact, IsIntegration]
+    public async Task Create_WithDBSharedRUSetting_WithCollectionRUvalue_CollectionOfferAndNoDbOffer()
+    {
+        // Arrange
+        var tempCollectionName = Guid.NewGuid().ToString();
+        var tempDbName = Guid.NewGuid().ToString();
+        var collectionUri = UriFactory.CreateDocumentCollectionUri(tempDbName, tempCollectionName);
+        var databaseUri = UriFactory.CreateDatabaseUri(tempDbName);
+        var dbOfferThroughput = 600;
+        var cosmosCacheFactorySettings = new CosmosCacheFactorySettings
+        {
+            UseKeyAsPartitionKey = true,
+            NewCollectionDefaultDTU = 500 //just so its different than default
+        };
+
+        using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, tempDbName, cosmosCacheFactorySettings))
+        using (var client = new DocumentClient(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey))
+        {
+            // Act
+            await client.CreateDatabaseAsync(new Database { Id = tempDbName }, new RequestOptions
+            {
+                OfferThroughput = dbOfferThroughput //non-default
+            });
+
+            //ensure temp collection is created
+            factory.Create<SimpleObject>(tempCollectionName);
+
+            Resource collectionResource = await client.ReadDocumentCollectionAsync(collectionUri);
+            Resource databaseResource = await client.ReadDatabaseAsync(databaseUri);
+            var collectionOffer = GetOffer(collectionResource, client);
+            var collectionOfferResource = await client.ReadOfferAsync(collectionOffer.SelfLink);
+            var collectionOfferContent = collectionOfferResource.Resource.GetPropertyValue<OfferContentV2>("content");
+            var databaseOffer = GetOffer(databaseResource, client);
+            var dbOfferResource = await client.ReadOfferAsync(databaseOffer.SelfLink);
+            var dbOfferContent = dbOfferResource.Resource.GetPropertyValue<OfferContentV2>("content");
+
+            // Assert
+            Assert.Equal(cosmosCacheFactorySettings.NewCollectionDefaultDTU, collectionOfferContent.OfferThroughput);
+            Assert.Equal(dbOfferThroughput, dbOfferContent.OfferThroughput);
+
+            // Cleanup
+            await factory.DocumentClient.DeleteDocumentCollectionAsync(collectionUri);
+            await factory.DocumentClient.DeleteDatabaseAsync(databaseUri);
+        }
+    }
+
+    [Fact, IsIntegration]
+    public async Task Create_WithDBSharedRUSetting_WithoutCollectionRUvalue_CollectionOfferSetToDefaultRUsAndNoDbOffer()
+    {
+        // Arrange
+        var tempCollectionName = Guid.NewGuid().ToString();
+        var collectionUri = UriFactory.CreateDocumentCollectionUri(LocalClusterCosmosDb.DbName, tempCollectionName);
+        var databaseUri = UriFactory.CreateDatabaseUri(LocalClusterCosmosDb.DbName);
+        var cosmosCacheFactorySettings = new CosmosCacheFactorySettings
+        {
+            UseKeyAsPartitionKey = true,
+            UseDatabaseSharedThroughput = true
+        };
+
+        using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, cosmosCacheFactorySettings))
+        using (var client = new DocumentClient(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey))
+        {
+            //ensure temp collection is created
+            factory.Create<SimpleObject>(tempCollectionName);
+
+            Resource collectionResource = await client.ReadDocumentCollectionAsync(collectionUri);
+            Resource databaseResource = await client.ReadDatabaseAsync(databaseUri);
+            var collectionOffer = GetOffer(collectionResource, client);
+            var collectionOfferResource = await client.ReadOfferAsync(collectionOffer.SelfLink);
+            var collectionOfferContent = collectionOfferResource.Resource.GetPropertyValue<OfferContentV2>("content");
+            var databaseOffer = GetOffer(databaseResource, client);
+
+            // Assert
+            Assert.Null(databaseOffer);
+            Assert.Equal(400, collectionOfferContent.OfferThroughput);
+
+            // Cleanup
+            await factory.DocumentClient.DeleteDocumentCollectionAsync(collectionUri);
+        }
+    }
+
+    private static Offer GetOffer(Resource resource, DocumentClient client)
+    {
+        var sqlQuerySpec = new SqlQuerySpec("SELECT * FROM offers o WHERE o.resource = @dbLink",
+            new SqlParameterCollection(new[] {new SqlParameter {Name = "@dbLink", Value = resource.SelfLink}}));
+        return client.CreateOfferQuery(sqlQuerySpec).AsEnumerable().FirstOrDefault();
     }
 }

@@ -2,7 +2,7 @@
 
   <PropertyGroup>
 
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <PackageReleaseNotes>Extended IndexingPolicy for the collection.</PackageReleaseNotes>
 
     <TargetFramework>netstandard2.0</TargetFramework>
