@@ -151,7 +151,7 @@ public class CosmosCacheFactoryTests
         var tempDbName = Guid.NewGuid().ToString();
         var collectionUri = UriFactory.CreateDocumentCollectionUri(tempDbName, tempCollectionName);
         var databaseUri = UriFactory.CreateDatabaseUri(tempDbName);
-        var offerThroughput = 500;
+        var offerThroughput = 400;
         var cosmosCacheFactorySettings = new CosmosCacheFactorySettings
         {
             UseDatabaseSharedThroughput = true,
@@ -164,7 +164,7 @@ public class CosmosCacheFactoryTests
             // Act
             await client.CreateDatabaseAsync(new Database { Id = tempDbName }, new RequestOptions
             {
-                OfferThroughput = offerThroughput //non-default
+                OfferThroughput = offerThroughput
             });
             
             //ensure temp collection is created
