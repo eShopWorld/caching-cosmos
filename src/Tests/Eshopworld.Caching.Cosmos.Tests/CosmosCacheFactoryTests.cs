@@ -144,7 +144,7 @@ public class CosmosCacheFactoryTests
     }
 
     [Fact, IsIntegration]
-    public async Task Create_WithoutCollectionDtu_NoCollectionOfferOnlyDbOffer()
+    public async Task Create_WithDBSharedRUSetting_WithoutCollectionRUvalue_NoCollectionOfferOnlyDbOffer()
     {
         // Arrange
         var tempCollectionName = Guid.NewGuid().ToString();
@@ -154,7 +154,7 @@ public class CosmosCacheFactoryTests
         var offerThroughput = 500;
         var cosmosCacheFactorySettings = new CosmosCacheFactorySettings
         {
-            DtuDefinedInCosmos = true,
+            DatabaseSharedRUs = true,
             UseKeyAsPartitionKey = true
         };
 
@@ -189,7 +189,53 @@ public class CosmosCacheFactoryTests
 
 
     [Fact, IsIntegration]
-    public async Task Create_WithCollectionDtu_CollectionOfferAndNoDbOffer()
+    public async Task Create_WithDBSharedRUSetting_WithCollectionRUvalue_CollectionOfferAndNoDbOffer()
+    {
+        // Arrange
+        var tempCollectionName = Guid.NewGuid().ToString();
+        var tempDbName = Guid.NewGuid().ToString();
+        var collectionUri = UriFactory.CreateDocumentCollectionUri(tempDbName, tempCollectionName);
+        var databaseUri = UriFactory.CreateDatabaseUri(tempDbName);
+        var dbOfferThroughput = 600;
+        var cosmosCacheFactorySettings = new CosmosCacheFactorySettings
+        {
+            UseKeyAsPartitionKey = true,
+            NewCollectionDefaultDTU = 500 //just so its different than default
+        };
+
+        using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, tempDbName, cosmosCacheFactorySettings))
+        using (var client = new DocumentClient(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey))
+        {
+            // Act
+            await client.CreateDatabaseAsync(new Database { Id = tempDbName }, new RequestOptions
+            {
+                OfferThroughput = dbOfferThroughput //non-default
+            });
+
+            //ensure temp collection is created
+            factory.Create<SimpleObject>(tempCollectionName);
+
+            Resource collectionResource = await client.ReadDocumentCollectionAsync(collectionUri);
+            Resource databaseResource = await client.ReadDatabaseAsync(databaseUri);
+            var collectionOffer = GetOffer(collectionResource, client);
+            var collectionOfferResource = await client.ReadOfferAsync(collectionOffer.SelfLink);
+            var collectionOfferContent = collectionOfferResource.Resource.GetPropertyValue<OfferContentV2>("content");
+            var databaseOffer = GetOffer(databaseResource, client);
+            var dbOfferResource = await client.ReadOfferAsync(databaseOffer.SelfLink);
+            var dbOfferContent = dbOfferResource.Resource.GetPropertyValue<OfferContentV2>("content");
+
+            // Assert
+            Assert.Equal(cosmosCacheFactorySettings.NewCollectionDefaultDTU, collectionOfferContent.OfferThroughput);
+            Assert.Equal(dbOfferThroughput, dbOfferContent.OfferThroughput);
+
+            // Cleanup
+            await factory.DocumentClient.DeleteDocumentCollectionAsync(collectionUri);
+            await factory.DocumentClient.DeleteDatabaseAsync(databaseUri);
+        }
+    }
+
+    [Fact, IsIntegration]
+    public async Task Create_WithDBSharedRUSetting_WithoutCollectionRUvalue_CollectionOfferSetToDefaultRUsAndNoDbOffer()
     {
         // Arrange
         var tempCollectionName = Guid.NewGuid().ToString();
@@ -197,14 +243,13 @@ public class CosmosCacheFactoryTests
         var databaseUri = UriFactory.CreateDatabaseUri(LocalClusterCosmosDb.DbName);
         var cosmosCacheFactorySettings = new CosmosCacheFactorySettings
         {
-            DtuDefinedInCosmos = true,
-            UseKeyAsPartitionKey = true
+            UseKeyAsPartitionKey = true,
+            DatabaseSharedRUs = true
         };
 
         using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, cosmosCacheFactorySettings))
         using (var client = new DocumentClient(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey))
         {
-            // Act
             //ensure temp collection is created
             factory.Create<SimpleObject>(tempCollectionName);
 
