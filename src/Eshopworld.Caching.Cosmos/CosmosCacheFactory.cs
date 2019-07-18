@@ -29,7 +29,8 @@ namespace Eshopworld.Caching.Cosmos
             _dbName = dbName ?? throw new ArgumentNullException(nameof(dbName));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
-            DocumentClient = new DocumentClient(cosmosAccountEndpoint, cosmosAccountKey, GetConnectionPolicy(settings));
+            DocumentClient =
+                new DocumentClient(cosmosAccountEndpoint, cosmosAccountKey, GetConnectionPolicy(settings));
         }
         public CosmosCacheFactory(Uri cosmosAccountEndpoint, string cosmosAccountKey, string dbName) : this(cosmosAccountEndpoint, cosmosAccountKey, dbName, CosmosCacheFactorySettings.Default){}
 
@@ -57,8 +58,7 @@ namespace Eshopworld.Caching.Cosmos
             {
                 var connectionPolicy = new ConnectionPolicy
                 {
-                    UseMultipleWriteLocations = true,
-                    EnableEndpointDiscovery = true
+                    UseMultipleWriteLocations = true
                 };
                 try
                 {

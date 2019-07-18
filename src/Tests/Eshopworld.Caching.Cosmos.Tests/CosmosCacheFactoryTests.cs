@@ -201,7 +201,6 @@ public class CosmosCacheFactoryTests
         using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, settings))
         {
             Assert.True(factory.DocumentClient.ConnectionPolicy.UseMultipleWriteLocations);
-            Assert.True(factory.DocumentClient.ConnectionPolicy.EnableEndpointDiscovery);
             Assert.NotEmpty(factory.DocumentClient.ConnectionPolicy.PreferredLocations);
             Assert.Equal(currentRegion, factory.DocumentClient.ConnectionPolicy.PreferredLocations.First());
         }
@@ -213,7 +212,6 @@ public class CosmosCacheFactoryTests
         using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName))
         {
             Assert.False(factory.DocumentClient.ConnectionPolicy.UseMultipleWriteLocations);
-            Assert.False(factory.DocumentClient.ConnectionPolicy.EnableEndpointDiscovery);
             Assert.Empty(factory.DocumentClient.ConnectionPolicy.PreferredLocations);
         }
     }
