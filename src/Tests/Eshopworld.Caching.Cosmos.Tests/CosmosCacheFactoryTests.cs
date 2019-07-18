@@ -154,7 +154,7 @@ public class CosmosCacheFactoryTests
         var offerThroughput = 500;
         var cosmosCacheFactorySettings = new CosmosCacheFactorySettings
         {
-            DatabaseSharedRUs = true,
+            UseDatabaseSharedThroughput = true,
             UseKeyAsPartitionKey = true
         };
 
@@ -244,7 +244,7 @@ public class CosmosCacheFactoryTests
         var cosmosCacheFactorySettings = new CosmosCacheFactorySettings
         {
             UseKeyAsPartitionKey = true,
-            DatabaseSharedRUs = true
+            UseDatabaseSharedThroughput = true
         };
 
         using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, cosmosCacheFactorySettings))

@@ -11,7 +11,7 @@
         /// If the Database does NOT have a user-defined RU setting and this setting is set to true,
         /// any on-the-fly created Collection will still default to 400 RUs
         /// </summary>
-        public bool DatabaseSharedRUs { get; set; }
+        public bool UseDatabaseSharedThroughput { get; set; }
 
         public static readonly CosmosCacheFactorySettings Default = new CosmosCacheFactorySettings();
     }
