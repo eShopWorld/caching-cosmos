@@ -187,6 +187,35 @@ public class CosmosCacheFactoryTests
         }
     }
 
+    [Fact, IsIntegration]
+    public void Create_WithMultiRegionReadWrite_DocumentClientHasTheRightSettings()
+    {
+        // Arrange
+        string currentRegion = "West Europe";
+        var settings = new CosmosCacheFactorySettings
+        {
+            MultiRegionReadWrite = true,
+            CurrentRegion = currentRegion
+        };
+
+        using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, settings))
+        {
+            Assert.True(factory.DocumentClient.ConnectionPolicy.UseMultipleWriteLocations);
+            Assert.NotEmpty(factory.DocumentClient.ConnectionPolicy.PreferredLocations);
+            Assert.Equal(currentRegion, factory.DocumentClient.ConnectionPolicy.PreferredLocations.First());
+        }
+    }
+
+    [Fact, IsIntegration]
+    public void Create_WithoutMultiRegionReadWrite_DocumentClientHasTheRightSettings()
+    {
+        using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName))
+        {
+            Assert.False(factory.DocumentClient.ConnectionPolicy.UseMultipleWriteLocations);
+            Assert.Empty(factory.DocumentClient.ConnectionPolicy.PreferredLocations);
+        }
+    }
+
 
     [Fact, IsIntegration]
     public async Task Create_WithDBSharedRUSetting_WithCollectionRUvalue_CollectionOfferAndNoDbOffer()
