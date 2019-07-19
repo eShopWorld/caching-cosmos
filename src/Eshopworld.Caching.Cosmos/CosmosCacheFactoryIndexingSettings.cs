@@ -4,5 +4,6 @@
     {
         public string[] IncludedPaths { get; set; }
         public string[] ExcludedPaths { get; set; }
+        public bool IsKeyValueStore { get; set; }
     }
 }

@@ -144,6 +144,39 @@ public class CosmosCacheFactoryTests
     }
 
     [Fact, IsIntegration]
+    public async Task Create_WithKeyValueStoreIndexingPolicy_CollectionIsCreatedAsKeyValueStore()
+    {
+        // Arrange
+        var tempCollectionName = Guid.NewGuid().ToString();
+        var settings = new CosmosCacheFactorySettings
+        {
+            IndexingSettings = new CosmosCacheFactoryIndexingSettings
+            {
+                IsKeyValueStore = true
+            }
+        };
+        var collectionUri = UriFactory.CreateDocumentCollectionUri(LocalClusterCosmosDb.DbName, tempCollectionName);
+
+        using (var factory = new CosmosCacheFactory(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey, LocalClusterCosmosDb.DbName, settings))
+        using (var client = new DocumentClient(LocalClusterCosmosDb.ConnectionURI, LocalClusterCosmosDb.AccessKey))
+        {
+            // Act
+            factory.Create<SimpleObject>(tempCollectionName);
+
+            // Assert
+            var documentCollection = (await client.ReadDocumentCollectionAsync(collectionUri)).Resource;
+            var actualIndexingPolicy = documentCollection.IndexingPolicy;
+
+            Assert.Equal(IndexingMode.None, actualIndexingPolicy.IndexingMode);
+            Assert.False(actualIndexingPolicy.Automatic);
+            Assert.Null(documentCollection.DefaultTimeToLive);
+
+            // Cleanup
+            await factory.DocumentClient.DeleteDocumentCollectionAsync(collectionUri);
+        }
+    }
+
+    [Fact, IsIntegration]
     public async Task Create_WithDBSharedRUSetting_WithoutCollectionRUvalue_NoCollectionOfferOnlyDbOffer()
     {
         // Arrange

@@ -77,6 +77,15 @@ namespace Eshopworld.Caching.Cosmos
 
         private IndexingPolicy BuildIndexingPolicy()
         {
+            if (_settings.IndexingSettings.IsKeyValueStore)
+            {
+                return new IndexingPolicy
+                {
+                    IndexingMode = IndexingMode.None,
+                    Automatic = false
+                };
+            }
+
             if ((_settings.IndexingSettings?.ExcludedPaths?.Length ?? 0) == 0 && (_settings.IndexingSettings?.IncludedPaths?.Length ?? 0) == 0)
             {
                 return new IndexingPolicy();
@@ -99,10 +108,12 @@ namespace Eshopworld.Caching.Cosmos
         {
             var db = DocumentClient.CreateDatabaseIfNotExistsAsync(new Database() {Id = _dbName}).ConfigureAwait(false).GetAwaiter().GetResult();
 
-            var docCol = new DocumentCollection()
+            bool isKeyValueStore = _settings.IndexingSettings != null && _settings.IndexingSettings.IsKeyValueStore;
+            int? defaultTimeToLive = isKeyValueStore ? (int?) null : _settings.DefaultTimeToLive;
+            var docCol = new DocumentCollection
             {
                 Id = name,
-                DefaultTimeToLive = _settings.DefaultTimeToLive,
+                DefaultTimeToLive = defaultTimeToLive,
                 IndexingPolicy = BuildIndexingPolicy()
             };
 
