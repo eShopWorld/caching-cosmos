@@ -111,7 +111,12 @@ namespace Eshopworld.Caching.Cosmos
         public Task<bool> KeyExpireAsync(string key, TimeSpan? expiry) => Task.FromResult(false);
 
         public void Remove(string key) => RemoveAsync(key).GetAwaiter().GetResult();
-        public Task RemoveAsync(string key) => DocumentClient.DeleteDocumentAsync(CreateDocumentURI(key));
+
+        public async Task RemoveAsync(string key)
+        {
+            var requestOptions = _usePartitionKey ? new RequestOptions() { PartitionKey = new PartitionKey(key) } : null;
+            await DocumentClient.DeleteDocumentAsync(CreateDocumentURI(key), requestOptions).ConfigureAwait(false);
+        }
 
         public async Task<T> GetAsync(string key) => (await GetResultAsync(key).ConfigureAwait(false)).Value;
         public T Get(string key) => GetResult(key).Value;
