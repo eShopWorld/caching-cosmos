@@ -2,8 +2,8 @@
 
   <PropertyGroup>
 
-    <Version>1.5.0</Version>
-    <PackageReleaseNotes>Extended IndexingPolicy for the collection.</PackageReleaseNotes>
+    <Version>1.5.1</Version>
+    <PackageReleaseNotes>Use partition key when remove entries.</PackageReleaseNotes>
 
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>

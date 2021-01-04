@@ -104,7 +104,10 @@ public class CosmosCacheFactoryTests
             var actualIndexingPolicy = (await client.ReadDocumentCollectionAsync(collectionUri))
                 .Resource.IndexingPolicy;
 
-            Assert.Single(actualIndexingPolicy.ExcludedPaths);
+            // _etag is excluded by default
+            var excludedPaths = actualIndexingPolicy.ExcludedPaths.Where(x => x.Path != "/\"_etag\"/?").ToArray();
+
+            Assert.Single(excludedPaths);
             Assert.Contains(actualIndexingPolicy.ExcludedPaths, x => x.Path == "/*");
 
             Assert.Equal(2, actualIndexingPolicy.IncludedPaths.Count);
@@ -133,7 +136,10 @@ public class CosmosCacheFactoryTests
             var actualIndexingPolicy = (await client.ReadDocumentCollectionAsync(collectionUri))
                 .Resource.IndexingPolicy;
 
-            Assert.Empty(actualIndexingPolicy.ExcludedPaths);
+            // _etag is excluded by default
+            var excludedPaths = actualIndexingPolicy.ExcludedPaths.Where(x => x.Path != "/\"_etag\"/?").ToArray();
+
+            Assert.Empty(excludedPaths);
 
             Assert.Single(actualIndexingPolicy.IncludedPaths);
             Assert.Contains(actualIndexingPolicy.IncludedPaths, x => x.Path == "/*");
